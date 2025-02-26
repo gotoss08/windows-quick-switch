@@ -6,7 +6,6 @@
 #include <string>
 #include <chrono>
 #include <thread>
-#include <atomic>
 #include <vector>
 #include <mutex>
 #include <algorithm>
@@ -63,6 +62,41 @@ std::wstring GetWindowTitle(HWND hwnd) {
     }
 
     return buffer.substr(0, length); // Remove null terminator
+}
+
+BOOL SwitchToWindow(HWND hWnd) {
+    if (!IsWindow(hWnd)) {
+        std::cerr << "Invalid window handle." << std::endl;
+        return FALSE;
+    }
+
+    // If the window is minimized, restore it.
+    if (IsIconic(hWnd)) {
+        ShowWindow(hWnd, SW_RESTORE);
+    }
+
+    // Get the current foreground window.
+    HWND hForeground = GetForegroundWindow();
+    DWORD dwForegroundThread = GetWindowThreadProcessId(hForeground, NULL);
+    DWORD dwCurrentThread = GetCurrentThreadId();
+
+    // Attach the input processing of the current thread to the foreground window's thread.
+    BOOL bAttached = FALSE;
+    if (dwCurrentThread != dwForegroundThread) {
+        bAttached = AttachThreadInput(dwCurrentThread, dwForegroundThread, TRUE);
+    }
+
+    // Bring the window to the top and show it.
+    SetWindowPos(hWnd, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    BOOL bResult = SetForegroundWindow(hWnd);
+
+    // Detach the input thread if we attached earlier.
+    if (bAttached) {
+        AttachThreadInput(dwCurrentThread, dwForegroundThread, FALSE);
+    }
+
+    return bResult;
 }
 
 void ShowOverlayNotificaiton(std::wstring text) {
@@ -136,6 +170,10 @@ void RegisterToolbarWindowClass(HINSTANCE hInstance) {
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+
+    SetConsoleOutputCP(1251);
+    std::setlocale(LC_ALL, "");
+    std::wcout.imbue(std::locale(""));
 
     SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
 
@@ -261,18 +299,24 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
             if (GetAsyncKeyState(VK_LWIN) & 0x8000 || GetAsyncKeyState(VK_RWIN) & 0x8000) {
                 if (pKeyboard->vkCode >= '1' && pKeyboard->vkCode <= '9') {
-
                     char windowIndex = pKeyboard->vkCode - 49;
                     bool shiftPressed = GetAsyncKeyState(VK_SHIFT) & 0x8000;
 
                     if (shiftPressed) {
-                        rememberedWindows[windowIndex] = GetForegroundWindow();
-                        std::wstring windowTitle = GetWindowTitle(rememberedWindows[windowIndex]);
+                        HWND currentWindow = GetForegroundWindow();
+                        rememberedWindows[windowIndex] = currentWindow;
+                        std::cout << "remembered window: " << currentWindow << std::endl;
+                        std::wstring windowTitle = GetWindowTitle(currentWindow);
                         ShowOverlayNotificaiton(formatWString(L"Window '%s' bound to WIN+%d", windowTitle.c_str(), windowIndex + 1));
                     } else {
                         HWND activeWindow = rememberedWindows[windowIndex];
-                        ShowWindow(activeWindow, SW_MINIMIZE);
-                        ShowWindow(activeWindow, SW_RESTORE);
+                        std::cout << "switching to window: " << activeWindow << std::endl;
+                        BOOL switched = SwitchToWindow(activeWindow);
+                        if (switched) {
+                            std::cout << "switched" << std::endl;
+                        } else {
+                            std::cout << "failed to switch window" << std::endl;
+                        }
                     }
 
                     return 1;
