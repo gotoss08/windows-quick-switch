@@ -171,11 +171,12 @@ void RegisterToolbarWindowClass(HINSTANCE hInstance) {
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
 
-    SetConsoleOutputCP(1251);
-    std::setlocale(LC_ALL, "");
-    std::wcout.imbue(std::locale(""));
+    // SetConsoleOutputCP(1251);
+    // std::setlocale(LC_ALL, "");
+    // std::wcout.imbue(std::locale(""));
 
-    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    // SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    SetProcessDPIAware(); // mingw compiler compatibility
 
     RegisterOverlayWindowClass(hInstance);
     RegisterToolbarWindowClass(hInstance);
